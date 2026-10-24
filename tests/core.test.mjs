@@ -63,3 +63,14 @@ test('language switch and restoration preserve answers and current question', ()
   assert.equal(C.groupIndex(26), 1);
   assert.equal(C.groupIndex(27), 2);
 });
+
+test('result categories follow the reference site at all score boundaries', () => {
+  for (const [score, type] of [[0,0],[15,0],[16,1],[35,1],[36,2],[55,2],[56,3],[80,3]]) {
+    const state = C.initialState();
+    state.answers = Array(40).fill(3);
+    for (let i=0;i<Math.floor(score/2);i++) state.answers[i]=1;
+    if (score%2) state.answers[Math.floor(score/2)]=2;
+    assert.equal(C.resultIndex(state), type, `score ${score}`);
+    assert.equal(D.types[type].max, [15,35,55,80][type]);
+  }
+});

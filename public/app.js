@@ -3,14 +3,14 @@
   const D = globalThis.SHEET_DATA;
   const C = globalThis.SheetCore;
   const STORAGE_KEY = 'uwaki-sheet-bilingual-v1';
-  const REPOSITORY = 'https://github.com/zerobeyondlogic/uwaki-sheet';
   const root = document.getElementById('root');
+  const circles = ['①', '②', '③'];
   let state = C.initialState();
-  let storageAvailable = true;
   let renderId = 0;
   let toastTimer;
+  let advanceTimer;
   let previewUrls = [];
-  try { state = C.normalizeState(JSON.parse(localStorage.getItem(STORAGE_KEY))); } catch { /* Keep a usable fresh sheet when storage is unavailable. */ }
+  try { state = C.normalizeState(JSON.parse(localStorage.getItem(STORAGE_KEY))); } catch { /* Use a fresh sheet if storage cannot be read. */ }
   const queryLang = new URL(location.href).searchParams.get('lang');
   if (['zh', 'ja'].includes(queryLang)) state.lang = queryLang;
   const t = () => D.ui[state.lang];
@@ -18,42 +18,25 @@
   const pad = n => String(n).padStart(2, '0');
   const esc = value => String(value).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
   const format = (text, values) => text.replace(/\{(\w+)\}/g, (_, k) => values[k] ?? '');
-  const icon = (name, size = 17) => {
-    const paths = {
-      arrow: '<path d="M4 12h16M14 6l6 6-6 6"/>',
-      back: '<path d="M20 12H4m6 6-6-6 6-6"/>',
-      reset: '<path d="M3 10a9 9 0 1 1 2 8M3 4v6h6"/>',
-      grid: '<rect x="4" y="4" width="6" height="6" rx="1"/><rect x="14" y="4" width="6" height="6" rx="1"/><rect x="4" y="14" width="6" height="6" rx="1"/><rect x="14" y="14" width="6" height="6" rx="1"/>',
-      single: '<rect x="5" y="4" width="14" height="16" rx="2"/><path d="M9 9h6M9 13h6"/>',
-      check: '<path d="m5 12 4 4L19 6"/>',
-      save: '<path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/>',
-      copy: '<rect x="8" y="8" width="12" height="13" rx="2"/><path d="M16 8V3H3v13h5"/>',
-      lock: '<rect x="5" y="10" width="14" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/>',
-      clock: '<circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/>'
-    };
-    return `<svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${paths[name] || paths.arrow}</svg>`;
-  };
   function save() {
-    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); storageAvailable = true; }
-    catch { storageAvailable = false; }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }
+    catch { toast(t().unsaved); }
   }
   function toast(message) {
     const element = document.getElementById('toast');
     element.textContent = message;
     element.classList.add('show');
     clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => element.classList.remove('show'), 3000);
+    toastTimer = setTimeout(() => element.classList.remove('show'), 2200);
   }
   function changeView(view, index, focus = true) {
+    clearTimeout(advanceTimer);
     state.view = view;
     if (Number.isInteger(index)) state.index = Math.min(39, Math.max(0, index));
     save();
     render();
-    if (focus) {
-      const heading = document.getElementById('view-heading');
-      heading?.focus({ preventScroll: true });
-      if (matchMedia('(max-width: 760px)').matches) document.getElementById('content').scrollIntoView({ block: 'start' });
-    }
+    if (focus) document.getElementById('view-heading')?.focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: 'instant' });
   }
   function continueAnswering() {
     const first = C.firstUnanswered(state);
@@ -62,111 +45,54 @@
   }
   function header() {
     const u = t();
-    const sheet = state.view === 'sheet';
-    return `<header class="site-header">
-      <nav class="language-switch" aria-label="语言 / 言語">
-        <button id="lang-zh" lang="zh-CN" data-lang="zh" aria-pressed="${state.lang === 'zh'}">简体中文</button>
-        <button id="lang-ja" lang="ja" data-lang="ja" aria-pressed="${state.lang === 'ja'}">日本語</button>
-      </nav>
-      <div class="header-actions"><span class="header-mark" aria-hidden="true">LOVE, WHERE'S THE LINE?</span>
-        <button class="text-button" id="toggle-view">${icon(sheet ? 'single' : 'grid')}${sheet ? u.questionView : u.sheetView}</button>
-        <button class="text-button" id="reset">${icon('reset', 16)}${u.reset}</button>
-      </div></header>`;
-  }
-  function sidebar() {
-    const u = t();
     const count = C.answered(state);
-    const currentGroup = C.groupIndex(state.index);
-    return `<aside class="sidebar">
-      <div class="eyebrow">${u.eyebrow}</div>
-      <h1 class="hero-title"><small>${u.titleTop}</small><span class="main-line">${u.titleMain}<span class="question-mark">?</span></span><span class="title-rule" aria-hidden="true"></span></h1>
-      <p class="title-bottom">${u.titleBottom}</p>
-      <p class="hero-lead multiline">${u.lead}</p><p class="hero-description multiline">${u.description}</p>
-      <section class="progress-block" aria-label="${u.progress}">
-        <div class="progress-caption"><span>${u.progress}</span><span><b>${pad(count)}</b><span class="total">/ 40</span></span></div>
-        <div class="progress-track" role="progressbar" aria-label="${u.progress}" aria-valuemin="0" aria-valuemax="40" aria-valuenow="${count}"><div class="progress-fill" style="width:${count / 40 * 100}%"></div></div>
-        <div class="nav-groups">${D.groups.map((g, i) => `<button class="group-button ${currentGroup === i && state.view !== 'intro' ? 'current' : ''}" data-jump="${g.start}"><b>0${i + 1}</b> ${g[state.lang]}</button>`).join('')}</div>
-        ${state.view !== 'intro' ? `<nav class="question-map" aria-label="${u.map}">${state.answers.map((v, i) => `<button class="map-number ${v ? 'done' : ''} ${state.view === 'question' && state.index === i ? 'active' : ''}" data-jump="${i}" aria-label="${pad(i + 1)}. ${esc(q(i))} · ${v ? u.labels[v - 1] : u.unanswered}" ${state.view === 'question' && state.index === i ? 'aria-current="step"' : ''}>${pad(i + 1)}</button>`).join('')}</nav><p class="map-hint">${u.mapHint}</p>` : ''}
-        <p class="save-note ${storageAvailable ? '' : 'warning'}">${icon(storageAvailable ? 'lock' : 'clock', 12)}<span>${storageAvailable ? u.saved : u.unsaved}</span></p>
-      </section>
-    </aside>`;
+    const label = { intro: 'START', reflection: 'LAST', result: 'RESULT', sheet: `${count} / 40` }[state.view] || `${pad(state.index + 1)} / 40`;
+    return `<div class="tools"><nav class="language-switch" aria-label="语言 / 言語"><button id="lang-zh" data-lang="zh" lang="zh-CN" aria-pressed="${state.lang === 'zh'}">简体中文</button><button id="lang-ja" data-lang="ja" lang="ja" aria-pressed="${state.lang === 'ja'}">日本語</button></nav><button class="link mode-link" id="toggle-view">${state.view === 'sheet' ? u.questionView : u.sheetView}</button></div>
+      <div class="topbar"><div class="xs" aria-hidden="true">✕✕</div><div class="pill" role="progressbar" aria-label="${u.progress}" aria-valuemin="0" aria-valuemax="40" aria-valuenow="${count}"><div class="fill" style="width:${count / 40 * 100}%"></div><span>${label}</span></div><div class="xs" aria-hidden="true">✕✕</div></div>`;
   }
-  const paperTop = label => `<div class="paper-topline"><span class="crosses" aria-hidden="true">× × ×</span><span class="paper-label">${label}</span><span class="crosses" aria-hidden="true">× × ×</span></div>`;
+  const legend = () => `<div class="legend">${t().labels.map((label, i) => `<span>${circles[i]} ${label}</span>`).join('')}</div>`;
   function intro() {
     const u = t();
-    return `<section class="paper">${paperTop('RELATIONSHIP CHECK SHEET')}<div class="paper-body intro-body">
-      <p class="intro-kicker">${u.introKicker}</p><h2 id="view-heading" tabindex="-1" class="intro-title multiline">${u.introTitle}</h2>
-      <p class="intro-text">${u.introText}</p><div class="mini-legend">${u.labels.map((label, i) => `<div class="mini-legend-item"><span class="number">0${i + 1}</span><span>${label}</span></div>`).join('')}</div>
-      <button class="button primary start-button" id="start">${C.answered(state) ? u.resume : u.start}${icon('arrow', 20)}</button>
-      <p class="intro-foot">${icon('clock', 13)}${u.introFoot}</p>
-    </div></section><div class="under-paper"><span>${u.note}</span><span class="tiny-cross" aria-hidden="true">♡</span></div>`;
+    return `<div class="intro"><p class="lead">${u.introLead}</p><h1 id="view-heading" tabindex="-1"><small>${u.titleTop}</small><br>${u.titleLine}</h1>${legend()}<p>${u.introText}</p><button class="btn solid" id="start">${C.answered(state) ? u.resume : u.start}</button>${C.answered(state) ? `<button class="link" id="reset">${u.reset}</button>` : ''}</div>`;
   }
   function question() {
     const u = t();
     const i = state.index;
-    const group = C.groupIndex(i);
-    return `<section class="paper">${paperTop(`${pad(i + 1)} / 40`)}<div class="paper-body question-body">
-      <div class="question-meta"><span class="chapter">0${group + 1} &nbsp; ${D.groups[group][state.lang]}</span><span>${u.question}</span></div>
-      <div class="question-number" aria-hidden="true">${pad(i + 1)}<span>.</span></div>
-      <h2 id="view-heading" tabindex="-1" class="question-text">${esc(q(i))}</h2>
-      <fieldset class="choices"><legend>${esc(q(i))}</legend>${u.labels.map((label, k) => {
-        const selected = state.answers[i] === k + 1;
-        return `<label class="choice ${selected ? 'selected' : ''}" for="answer-${k + 1}"><input id="answer-${k + 1}" type="radio" name="answer" value="${k + 1}" ${selected ? 'checked' : ''} data-answer="${i}"><span class="check-box" aria-hidden="true">${selected ? icon('check', 17) : ''}</span><span><span class="choice-main">${label}</span><span class="choice-note">${u.choiceNotes[k]}</span></span><span class="choice-key" aria-hidden="true">${k + 1}</span></label>`;
-      }).join('')}</fieldset>
-      <div class="question-nav"><button id="previous" class="text-button">${icon('back', 16)}${u.previous}</button><button id="next" class="button primary next-button" ${state.answers[i] ? '' : 'disabled'}>${i === 39 ? u.toReflection : u.next}${icon('arrow', 17)}</button></div>
-      <p class="choice-help">${u.chooseHint}</p>
-    </div></section><div class="under-paper"><span class="keyboard-note">${u.keyboardHint}</span><span>${u.answered} ${C.answered(state)} / 40</span></div>`;
+    return `<div class="qwrap"><div class="qnum" aria-hidden="true">${pad(i + 1)}<span>.</span></div><h2 class="qtext" id="view-heading" tabindex="-1">${esc(q(i))}</h2><hr class="rule"><div class="choices" role="group" aria-labelledby="view-heading">${u.labels.map((label, k) => `<button class="choice ${state.answers[i] === k + 1 ? 'on' : ''}" id="answer-${k + 1}" data-choice="${k + 1}" aria-pressed="${state.answers[i] === k + 1}"><span class="box" aria-hidden="true">${state.answers[i] === k + 1 ? '✓' : ''}</span><span>${circles[k]} ${label}</span></button>`).join('')}</div><div class="nav"><button class="link" id="previous">← ${u.previous}</button><button class="link" id="next" ${state.answers[i] ? '' : 'disabled'}>${u.next} →</button></div></div>`;
   }
   function reflectionChoices(name = 'reflection') {
     const u = t();
-    return `<div class="reflection-choices">${[true, false].map((v, k) => `<label class="choice ${state.reflection === v ? 'selected' : ''}" for="${name}-${k}"><input type="radio" id="${name}-${k}" name="${name}" value="${v}" data-reflection ${state.reflection === v ? 'checked' : ''}><span class="check-box" aria-hidden="true">${state.reflection === v ? icon('check', 17) : ''}</span><span class="choice-main">${v ? u.yes : u.no}</span></label>`).join('')}</div>`;
+    return `<div class="yn">${[true, false].map((v, k) => `<button class="btn ${state.reflection === v ? 'solid' : ''}" id="${name}-${k}" data-reflection="${v}" aria-pressed="${state.reflection === v}">${v ? u.yesShort : u.noShort}</button>`).join('')}</div>`;
   }
   function reflection() {
     const u = t();
-    return `<section class="paper">${paperTop('ONE LAST QUESTION')}<div class="paper-body reflection-body">
-      <p class="reflection-number">${u.reflectionKicker}</p><h2 id="view-heading" tabindex="-1" class="reflection-text multiline">${u.reflection}</h2><p class="reflection-note">${u.reflectionNote}</p>
-      <fieldset class="choices"><legend>${u.reflection}</legend>${reflectionChoices()}</fieldset>
-      <div class="question-nav"><button id="back-final" class="text-button">${icon('back', 16)}${u.previous}</button><button id="show-result" class="button primary" ${C.isComplete(state) ? '' : 'disabled'}>${u.resultButton}${icon('arrow', 16)}</button></div>
-      ${C.answered(state) < 40 ? `<button class="pending-button" id="continue">${format(u.missing, { n: 40 - C.answered(state) })}</button>` : ''}
-    </div></section>`;
+    return `<div class="qwrap"><div class="qnum final-num" aria-hidden="true">LAST<span>.</span></div><h2 class="qtext" id="view-heading" tabindex="-1">${u.reflection.replace('\n', '')}</h2><hr class="rule">${reflectionChoices()}<div class="nav"><button class="link" id="back-final">← ${u.previous}</button>${C.isComplete(state) ? `<button class="link" id="show-result">${u.resultButton} →</button>` : ''}</div>${C.answered(state) < 40 ? `<button class="link" id="continue">${format(u.missing, { n: 40 - C.answered(state) })}</button>` : ''}</div>`;
   }
-  function tableRows(g) {
+  function tableRows(group) {
     const u = t();
-    return state.answers.slice(g.start, g.end).map((a, k) => {
-      const i = g.start + k;
+    return state.answers.slice(group.start, group.end).map((a, k) => {
+      const i = group.start + k;
       return `<div class="table-row" role="group" aria-labelledby="row-${i}"><p class="row-text" id="row-${i}"><span class="n">${pad(i + 1)}.</span><span>${esc(q(i))}</span></p>${u.labels.map((label, n) => `<label class="table-choice ${a === n + 1 ? 'selected' : ''}" for="table-${i}-${n}"><input id="table-${i}-${n}" type="radio" name="row-${i}" value="${n + 1}" data-answer="${i}" aria-label="${pad(i + 1)}. ${esc(q(i))}：${label}" ${a === n + 1 ? 'checked' : ''}><span class="small-box" aria-hidden="true">${a === n + 1 ? '✓' : ''}</span></label>`).join('')}</div>`;
     }).join('');
   }
   function sheet() {
     const u = t();
-    const count = C.answered(state);
-    return `<section class="paper sheet-paper">${paperTop('ALL 40 QUESTIONS')}<div class="paper-body">
-      <h2 id="view-heading" tabindex="-1" class="sheet-title">${u.sheetHeading}</h2><p class="sheet-description">${u.sheetDescription}</p>
-      <div class="table-legend">${u.labels.map((label, i) => `<span>${i + 1}. ${label}</span>`).join('')}</div>
-      ${D.groups.map((g, k) => `<section class="sheet-chapter" id="chapter-${k}"><h3>${pad(k + 1)} &nbsp; ${g[state.lang]}<span>${pad(g.start + 1)} — ${pad(g.end)}</span></h3><div class="table-head" aria-hidden="true"><span></span><span>1</span><span>2</span><span>3</span></div>${tableRows(g)}</section>`).join('')}
-      <section class="sheet-reflection"><h3>${u.reflection.replace('\n', '')}</h3><fieldset class="choices"><legend>${u.reflection}</legend>${reflectionChoices('table-reflection')}</fieldset></section>
-      <div class="sheet-action">${count < 40 ? `<button class="pending-button" id="continue">${format(u.missing, { n: 40 - count })}${icon('arrow', 14)}</button>` : `<p class="count-caption">${typeof state.reflection === 'boolean' ? u.complete : u.reflectionMissing}</p>`}<button id="show-result" class="button primary" ${C.isComplete(state) ? '' : 'disabled'}>${u.resultButton}${icon('arrow', 16)}</button></div>
-    </div></section>`;
+    return `<div class="sheet-content"><h1 id="view-heading" tabindex="-1" class="sheet-heading">${u.sheetHeading}</h1>${legend()}${D.groups.map((g, k) => `<section class="sheet-chapter"><div class="table-head"><span>${k + 1} / 3</span><span>1</span><span>2</span><span>3</span></div>${tableRows(g)}</section>`).join('')}<hr class="rule"><h2 class="sheet-final">${u.reflection.replace('\n', '')}</h2>${reflectionChoices('table-reflection')}<button id="show-result" class="btn solid" ${C.isComplete(state) ? '' : 'disabled'}>${u.resultButton}</button>${C.answered(state) < 40 ? `<button class="link" id="continue">${format(u.missing, { n: 40 - C.answered(state) })}</button>` : ''}<button class="link" id="reset">${u.reset}</button></div>`;
   }
   function result() {
     const u = t();
+    const type = D.types[C.resultIndex(state)][state.lang];
     const counts = C.counts(state);
-    return `<section class="paper">${paperTop('YOUR BOUNDARIES')}<div class="paper-body result-body">
-      <p class="intro-kicker">${u.resultKicker}</p><h2 id="view-heading" tabindex="-1" class="intro-title multiline">${u.resultTitle}</h2><p class="result-note">${u.resultNote}</p>
-      <div class="count-cards">${counts.map((n, i) => `<div class="count-card"><strong>${n}</strong><small>${u.labels[i]}</small></div>`).join('')}</div><p class="count-caption">${u.resultCounts}</p>
-      <div class="result-reflection"><span>${u.reflectionLabel}</span><strong>${state.reflection ? u.yesShort : u.noShort}</strong></div>
-      <div class="result-actions"><button id="export-summary" class="button primary">${icon('save', 17)}${u.export}</button><button id="copy-result" class="button secondary">${icon('copy', 16)}${u.copy}</button></div>
-      <textarea class="copy-fallback" id="copy-fallback" aria-label="${u.shareText}" readonly hidden></textarea>
-      <p class="export-help">${u.exportHelp}</p><div class="export-pages">${D.groups.map((g, k) => `<div class="export-page"><img id="preview-${k}" alt="${u.savePreview} · ${format(u.sheetPage, { n: k + 1 })}" width="1500" height="2000"><button data-download="${k}">${format(u.download, { n: k + 1 })} ↓</button></div>`).join('')}</div>
-      <details class="answers-details"><summary>${u.allAnswers}</summary><ol class="answer-list">${state.answers.map((a, i) => `<li><span class="n">${pad(i + 1)}</span><span class="text">${esc(q(i))}</span><button data-jump="${i}" aria-label="${u.edit} ${pad(i + 1)}">${u.shortLabels[a - 1]} ↗</button></li>`).join('')}</ol></details>
-      <button class="text-button result-edit" id="edit">${icon('back', 15)}${u.edit}</button>
-    </div></section>`;
+    const text = shareText();
+    const intent = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text);
+    return `<div class="result-content"><p class="lead result-lead">${u.resultKicker}</p><h2 id="view-heading" tabindex="-1" class="res-type">${type.name}</h2><p class="res-desc">${type.desc}</p><div class="counts">${counts.map((n, i) => `<div class="count ${i === 0 ? 'c1' : ''}"><b>${n}</b><small>${circles[i]} ${u.shortLabels[i]}</small></div>`).join('')}</div><img class="card-img" id="card-image" alt="${u.resultAlt}" width="1200" height="1200"><div class="actions"><button id="export-summary" class="btn solid">${u.export}</button><a class="btn solid" href="${intent}" target="_blank" rel="noopener noreferrer">𝕏 ${u.post}</a><button id="copy-result" class="link">${u.copy}</button></div><textarea id="share-text" class="share-text" aria-label="${u.shareText}">${esc(text)}</textarea><details class="export-details"><summary>${u.exportSheet}</summary><div class="export-pages">${D.groups.map((g, k) => `<div class="export-page"><img id="preview-${k}" alt="${u.savePreview} · ${format(u.sheetPage, { n: k + 1 })}" width="1500" height="2000"><button class="link" data-download="${k}">${format(u.download, { n: k + 1 })}</button></div>`).join('')}</div></details><details class="answers-details"><summary>${u.allAnswers}</summary><ol class="alist">${state.answers.map((a, i) => `<li><span class="n">${pad(i + 1)}.</span><span class="t">${esc(q(i))}</span><button class="a k${a}" data-jump="${i}" aria-label="${u.edit} ${pad(i + 1)}">${circles[a - 1]}</button></li>`).join('')}</ol></details><div class="nav"><button class="link" id="edit">← ${u.edit}</button><button class="link" id="reset">${u.reset}</button></div></div>`;
   }
   function footer() {
     const u = t();
-    return `<footer class="site-footer"><div><div class="footer-credits"><a href="${D.source}" target="_blank" rel="noopener noreferrer">${u.credit} ↗</a><a href="${D.design}" target="_blank" rel="noopener noreferrer">${u.designCredit} ↗</a></div><div class="footer-credits"><a href="${D.reference}" target="_blank" rel="noopener noreferrer">${u.referenceCredit} ↗</a><a href="${REPOSITORY}" target="_blank" rel="noopener noreferrer">${u.project} ↗</a></div><p class="footer-note">${u.adaptation}</p></div><div class="footer-right"><p>${u.privacy}</p><p>${u.note}</p></div></footer>`;
+    return `<footer class="credit">${u.credit}（<a href="${D.source}" target="_blank" rel="noopener noreferrer">@sukosuko_sukoya</a>）<br>${u.designCredit}（<a href="${D.design}" target="_blank" rel="noopener noreferrer">@air_trpg</a>）<br><a href="${D.reference}" target="_blank" rel="noopener noreferrer">${u.referenceCredit}</a></footer>`;
   }
   function render(focusId) {
+    clearTimeout(advanceTimer);
     const generation = ++renderId;
     for (const url of previewUrls) URL.revokeObjectURL(url);
     previewUrls = [];
@@ -175,7 +101,7 @@
     document.title = u.pageTitle;
     document.querySelector('meta[name="description"]').content = u.introText;
     const views = { intro, question, reflection, sheet, result };
-    root.innerHTML = `${header()}<div class="layout">${sidebar()}<main class="work-area" id="content">${views[state.view]()}</main></div>${footer()}`;
+    root.innerHTML = `<div class="wrap">${header()}<main class="sheet" id="content">${views[state.view]()}</main>${footer()}</div>`;
     document.getElementById('reset-title').textContent = u.resetTitle;
     document.getElementById('reset-description').textContent = u.resetDescription;
     document.getElementById('cancel-reset').textContent = u.cancel;
@@ -184,17 +110,22 @@
     if (focusId) document.getElementById(focusId)?.focus({ preventScroll: true });
     if (state.view === 'result') {
       const snapshot = structuredClone(state);
-      requestAnimationFrame(() => {
-        for (let k = 0; k < 3; k++) {
-          createImage(snapshot, k).then(blob => {
-            if (generation !== renderId) return;
-            const url = URL.createObjectURL(blob);
-            previewUrls.push(url);
-            document.getElementById(`preview-${k}`).src = url;
-          }).catch(() => { if (generation === renderId) toast(t().exportFailed); });
-        }
-      });
+      for (const page of [null, 0, 1, 2]) {
+        createImage(snapshot, page).then(blob => {
+          if (generation !== renderId) return;
+          const url = URL.createObjectURL(blob);
+          previewUrls.push(url);
+          document.getElementById(page === null ? 'card-image' : `preview-${page}`).src = url;
+        }).catch(() => { if (generation === renderId) toast(t().exportFailed); });
+      }
     }
+  }
+  function selectChoice(value) {
+    const index = state.index;
+    state.answers[index] = value;
+    save();
+    render(`answer-${value}`);
+    advanceTimer = setTimeout(() => { if (state.view === 'question' && state.index === index) next(); }, 170);
   }
   function bind() {
     root.querySelectorAll('[data-lang]').forEach(button => button.onclick = () => {
@@ -208,6 +139,7 @@
       window.scrollTo({ top: y, behavior: 'instant' });
     });
     root.querySelectorAll('[data-jump]').forEach(button => button.onclick = () => changeView('question', Number(button.dataset.jump)));
+    root.querySelectorAll('[data-choice]').forEach(button => button.onclick = () => selectChoice(Number(button.dataset.choice)));
     root.querySelectorAll('[data-answer]').forEach(input => input.onchange = () => {
       const y = scrollY;
       state.answers[Number(input.dataset.answer)] = Number(input.value);
@@ -215,26 +147,21 @@
       render(input.id);
       window.scrollTo({ top: y, behavior: 'instant' });
     });
-    root.querySelectorAll('[data-reflection]').forEach(input => input.onchange = () => {
-      const y = scrollY;
-      state.reflection = input.value === 'true';
-      save();
-      render(input.id);
-      window.scrollTo({ top: y, behavior: 'instant' });
+    root.querySelectorAll('[data-reflection]').forEach(button => button.onclick = () => {
+      state.reflection = button.dataset.reflection === 'true';
+      if (state.view === 'reflection' && C.isComplete(state)) changeView('result');
+      else { const y = scrollY; save(); render(button.id); window.scrollTo({ top: y, behavior: 'instant' }); }
     });
     const click = (id, fn) => { const el = document.getElementById(id); if (el) el.onclick = fn; };
     click('start', continueAnswering);
     click('continue', continueAnswering);
-    click('toggle-view', () => {
-      if (state.view === 'sheet') changeView('question', state.index);
-      else changeView('sheet');
-    });
+    click('toggle-view', () => changeView(state.view === 'sheet' ? 'question' : 'sheet', state.index));
     click('previous', () => state.index === 0 ? changeView('intro') : changeView('question', state.index - 1));
     click('next', next);
     click('back-final', () => changeView('question', 39));
     click('show-result', () => { if (C.isComplete(state)) changeView('result'); });
     click('edit', () => changeView('sheet'));
-    click('reset', () => document.getElementById('reset-dialog').showModal());
+    click('reset', () => { clearTimeout(advanceTimer); document.getElementById('reset-dialog').showModal(); });
     click('export-summary', () => downloadImage(null));
     click('copy-result', copyResult);
     root.querySelectorAll('[data-download]').forEach(button => button.onclick = () => downloadImage(Number(button.dataset.download)));
@@ -250,48 +177,31 @@
     save();
     document.getElementById('reset-dialog').close();
     render('start');
-    toast(t().resetDone);
   };
   document.addEventListener('keydown', event => {
-    if (document.getElementById('reset-dialog').open || event.ctrlKey || event.metaKey || event.altKey) return;
-    if (state.view !== 'question') return;
-    if (/TEXTAREA|SELECT/.test(event.target.tagName) || event.target.isContentEditable) return;
-    if (['1', '2', '3'].includes(event.key)) {
-      event.preventDefault();
-      state.answers[state.index] = Number(event.key);
-      save();
-      render(`answer-${event.key}`);
-    } else if (event.key === 'Enter' && ['INPUT', 'BODY', 'H2'].includes(event.target.tagName)) {
-      event.preventDefault();
-      next();
-    } else if (['ArrowRight', 'ArrowLeft'].includes(event.key) && event.target.tagName !== 'INPUT') {
-      event.preventDefault();
-      if (event.key === 'ArrowRight') next();
-      else if (state.index > 0) changeView('question', state.index - 1);
-    }
+    if (document.getElementById('reset-dialog').open || event.ctrlKey || event.metaKey || event.altKey || state.view !== 'question') return;
+    if (/INPUT|TEXTAREA|SELECT/.test(event.target.tagName) || event.target.isContentEditable) return;
+    if (['1', '2', '3'].includes(event.key)) { event.preventDefault(); selectChoice(Number(event.key)); }
+    else if (event.key === 'ArrowRight') { event.preventDefault(); next(); }
+    else if (event.key === 'ArrowLeft' && state.index > 0) { event.preventDefault(); changeView('question', state.index - 1); }
   });
   function shareText() {
     const u = t();
+    const type = D.types[C.resultIndex(state)][state.lang];
     const url = new URL(location.href);
     url.search = `?lang=${state.lang}`;
     url.hash = '';
-    return [u.shareText, ...C.counts(state).map((n, i) => format(u.shareCount, { label: u.labels[i], n })), `${u.reflectionLabel}${state.reflection ? u.yesShort : u.noShort}`, u.footerLine, url.protocol.startsWith('http') ? url.href : 'https://zerobeyondlogic.github.io/uwaki-sheet/'].join('\n');
+    return [u.shareText, `【${type.name}】`, ...C.counts(state).map((n, i) => format(u.shareCount, { label: u.labels[i], n })), `${u.reflectionLabel}${state.reflection ? u.yesShort : u.noShort}`, u.footerLine, url.protocol.startsWith('http') ? url.href : 'https://zerobeyondlogic.github.io/uwaki-sheet/'].join('\n');
   }
   async function copyResult() {
-    const text = shareText();
-    try { await navigator.clipboard.writeText(text); toast(t().copied); }
-    catch {
-      const fallback = document.getElementById('copy-fallback');
-      fallback.hidden = false;
-      fallback.value = text;
-      fallback.focus();
-      fallback.select();
-      toast(t().copyFailed);
-    }
+    const textarea = document.getElementById('share-text');
+    try { await navigator.clipboard.writeText(textarea.value); toast(t().copied); }
+    catch { textarea.focus(); textarea.select(); toast(t().copyFailed); }
   }
-  /* All export text is drawn locally; no font, CDN, screenshot service or image upload is needed. */
-  const fontStack = lang => lang === 'ja' ? '"Yu Gothic","Meiryo",sans-serif' : '"Microsoft YaHei","PingFang SC",sans-serif';
-  function canvasText(g, text, x, y, width, fontSize, { weight = 600, color = '#d81b81', lineHeight = 1.65, align = 'left', minSize = fontSize, maxLines = 3 } = {}) {
+
+  /* Export images are rendered in the browser. */
+  const fontStack = lang => lang === 'ja' ? '"Zen Maru Gothic","Yu Gothic","Meiryo",sans-serif' : '"Sheet Chinese","Microsoft YaHei","PingFang SC",sans-serif';
+  function canvasText(g, text, x, y, width, fontSize, { weight = 600, color = '#ff33c4', lineHeight = 1.65, align = 'left', minSize = fontSize, maxLines = 3 } = {}) {
     let lines;
     let size = fontSize;
     do {
@@ -313,7 +223,7 @@
     lines.forEach((line, k) => g.fillText(line, x, y + k * size * lineHeight));
     return lines.length * size * lineHeight;
   }
-  function line(g, x1, y1, x2, y2, color = '#ed3aa0', width = 3) {
+  function line(g, x1, y1, x2, y2, color = '#ff33c4', width = 3) {
     g.beginPath(); g.moveTo(x1, y1); g.lineTo(x2, y2); g.strokeStyle = color; g.lineWidth = width; g.stroke();
   }
   function check(g, x, y, size) {
@@ -324,15 +234,15 @@
     const group = D.groups[page];
     const cv = document.createElement('canvas'); cv.width = 1500; cv.height = 2000; cv.dataset.font = fontStack(s.lang);
     const g = cv.getContext('2d');
-    g.fillStyle = '#f3f1f2'; g.fillRect(0, 0, 1500, 2000);
+    g.fillStyle = '#e4e5e8'; g.fillRect(0, 0, 1500, 2000);
     canvasText(g, '× × × ×', 72, 44, 330, 48, { weight: 700 });
     canvasText(g, '× × × ×', 1428, 44, 330, 48, { weight: 700, align: 'right' });
-    g.fillStyle = '#e83399'; g.beginPath(); g.roundRect(490, 48, 520, 54, 27); g.fill();
+    g.fillStyle = '#ff33c4'; g.beginPath(); g.roundRect(490, 48, 520, 54, 27); g.fill();
     canvasText(g, `${page + 1} / 3`, 750, 59, 450, 27, { color: 'white', align: 'center', lineHeight: 1 });
-    line(g, 57, 157, 57, 1860, '#ed3aa0', 13); line(g, 1443, 157, 1443, 1860, '#ed3aa0', 13);
+    line(g, 57, 157, 57, 1860, '#ff33c4', 13); line(g, 1443, 157, 1443, 1860, '#ff33c4', 13);
     canvasText(g, u.sheetHeading, 750, 157, 1250, 65, { weight: 800, align: 'center', minSize: 54, maxLines: 1 });
     canvasText(g, `${pad(page + 1)}  ${group[s.lang]}`, 140, 263, 1200, 25, { weight: 600 });
-    g.fillStyle = '#e83399'; g.fillRect(135, 317, 1230, 55);
+    g.fillStyle = '#ff33c4'; g.fillRect(135, 317, 1230, 55);
     u.labels.forEach((label, k) => canvasText(g, `${k + 1}. ${label}`, [167, 490, 1030][k], 331, [300, 525, 300][k], 24, { color: 'white', weight: 700 }));
     const cols = [1120, 1215, 1310];
     cols.forEach((x, k) => canvasText(g, k + 1, x, 399, 70, 38, { align: 'center', weight: 800 }));
@@ -346,54 +256,62 @@
       const nLines = canvasText(g, text, 247, cy + 6, 785, 27, { weight: 650, lineHeight: 1.5, minSize: 22, maxLines: 2 });
       if (nLines > rowHeight - 12) throw new Error(`Export text overflows at question ${i + 1}`);
       cols.forEach((x, k) => {
-        g.strokeStyle = '#e83399'; g.lineWidth = 3.5; g.strokeRect(x - 24, cy + 5, 48, 48);
+        g.strokeStyle = '#ff33c4'; g.lineWidth = 3.5; g.strokeRect(x - 24, cy + 5, 48, 48);
         if (s.answers[i] === k + 1) check(g, x - 24, cy + 5, 48);
       });
-      line(g, 135, cy + rowHeight - 13, 1365, cy + rowHeight - 13, '#ed3aa0', 2);
+      line(g, 135, cy + rowHeight - 13, 1365, cy + rowHeight - 13, '#ff33c4', 2);
     }
     if (page === 2) {
       canvasText(g, u.reflectionLabel, 140, 1726, 1000, 30, { maxLines: 2 });
       canvasText(g, s.reflection ? u.yesShort : u.noShort, 1315, 1726, 180, 35, { align: 'right', weight: 800 });
       line(g, 135, 1790, 1365, 1790);
     }
-    canvasText(g, u.footerLine, 750, 1890, 1300, 19, { align: 'center', color: '#806e78' });
-    canvasText(g, 'zerobeyondlogic.github.io/uwaki-sheet', 750, 1930, 1300, 17, { align: 'center', color: '#806e78' });
+    canvasText(g, u.footerLine, 750, 1890, 1300, 19, { align: 'center', color: '#4a2140' });
+    canvasText(g, 'zerobeyondlogic.github.io/uwaki-sheet', 750, 1930, 1300, 17, { align: 'center', color: '#4a2140' });
     return cv;
   }
   function drawSummary(s) {
     const u = D.ui[s.lang];
-    const cv = document.createElement('canvas'); cv.width = 1200; cv.height = 1330; cv.dataset.font = fontStack(s.lang);
+    const type = D.types[C.resultIndex(s)][s.lang];
+    const cv = document.createElement('canvas'); cv.width = 1200; cv.height = 1200; cv.dataset.font = fontStack(s.lang);
     const g = cv.getContext('2d');
-    g.fillStyle = '#f7f5f2'; g.fillRect(0, 0, 1200, 1330);
-    line(g, 50, 60, 1150, 60, '#ed3aa0', 7);
-    canvasText(g, u.pageTitle, 75, 97, 1050, 29, { weight: 700 });
-    canvasText(g, '× × ×', 1125, 92, 300, 36, { align: 'right' });
-    canvasText(g, u.summaryHeading, 75, 188, 1050, 67, { weight: 800 });
-    canvasText(g, u.resultNote, 75, 299, 1050, 24, { color: '#806e78', lineHeight: 1.7, maxLines: 2 });
+    g.fillStyle = '#e4e5e8'; g.fillRect(0, 0, 1200, 1200);
+    canvasText(g, '✕✕✕', 44, 44, 250, 52, { weight: 900 });
+    canvasText(g, '✕✕✕', 1156, 44, 250, 52, { weight: 900, align: 'right' });
+    g.fillStyle = '#ff33c4'; g.beginPath(); g.roundRect(300, 46, 600, 52, 26); g.fill();
+    canvasText(g, 'R E S U L T', 600, 56, 550, 26, { weight: 800, color: 'white', align: 'center' });
+    line(g, 49, 140, 49, 1140, '#ff33c4', 18); line(g, 1151, 140, 1151, 1140, '#ff33c4', 18);
+    canvasText(g, u.pageTitle, 600, 158, 1000, 30, { align: 'center', weight: 900 });
+    canvasText(g, u.resultKicker, 600, 231, 980, 34, { align: 'center', color: '#4a2140' });
+    g.canvas.dataset.font = s.lang === 'ja' ? '"Dela Gothic One",sans-serif' : fontStack(s.lang);
+    canvasText(g, type.name, 600, 300, 1000, 110, { weight: s.lang === 'ja' ? 400 : 900, align: 'center', minSize: 58, maxLines: 1 });
+    g.canvas.dataset.font = fontStack(s.lang);
+    canvasText(g, type.desc, 600, 437, 950, 27, { align: 'center', color: '#4a2140', maxLines: 2, minSize: 23, lineHeight: 1.5 });
     const counts = C.counts(s);
     counts.forEach((n, k) => {
-      const x = 75 + k * 357;
-      g.fillStyle = k === 0 ? '#d81b81' : '#fde8f1'; g.fillRect(x, 410, 336, 203);
-      canvasText(g, n, x + 168, 432, 310, 88, { color: k === 0 ? 'white' : '#d81b81', align: 'center', weight: 800 });
-      canvasText(g, u.labels[k], x + 168, 552, 310, 20, { color: k === 0 ? 'white' : '#d81b81', align: 'center', minSize: 17, maxLines: 1 });
+      const x = 120 + k * 330;
+      g.fillStyle = k === 0 ? '#ff33c4' : '#e4e5e8'; g.fillRect(x, 530, 300, 170);
+      g.strokeStyle = '#ff33c4'; g.lineWidth = 6; g.strokeRect(x, 530, 300, 170);
+      canvasText(g, n, x + 150, 537, 280, 96, { weight: 900, color: k === 0 ? 'white' : '#ff33c4', align: 'center' });
+      canvasText(g, `${circles[k]} ${u.shortLabels[k]}`, x + 150, 653, 280, 25, { weight: 900, color: k === 0 ? 'white' : '#ff33c4', align: 'center' });
     });
-    canvasText(g, u.resultCounts, 75, 658, 1050, 24, { color: '#806e78' });
     for (let i = 0; i < 40; i++) {
-      const x = 75 + i % 10 * 108;
-      const y = 724 + Math.floor(i / 10) * 84;
+      const x = 187 + i % 10 * 84;
+      const y = 760 + Math.floor(i / 10) * 84;
       const a = s.answers[i];
-      g.fillStyle = a === 1 ? '#d81b81' : a === 2 ? '#f7cde2' : '#fffdfb';
-      g.fillRect(x, y, 79, 62); g.strokeStyle = '#dfa5c2'; g.lineWidth = 1.5; g.strokeRect(x, y, 79, 62);
-      canvasText(g, pad(i + 1), x + 39.5, y + 15, 70, 25, { color: a === 1 ? 'white' : '#8e466a', align: 'center', weight: 700 });
+      g.fillStyle = a === 1 ? '#ff33c4' : a === 2 ? '#ffc2ec' : '#e4e5e8'; g.fillRect(x, y, 70, 70);
+      g.strokeStyle = '#ff33c4'; g.lineWidth = 6;
+      if (a !== 1) g.strokeRect(x + 3, y + 3, 64, 64);
+      canvasText(g, pad(i + 1), x + 35, y + 19, 60, 24, { weight: 900, color: a === 1 ? 'white' : '#d61fa3', align: 'center' });
     }
-    line(g, 75, 1085, 1125, 1085, '#eadce3', 2);
-    canvasText(g, u.reflectionLabel, 75, 1117, 850, 23, { color: '#352831', maxLines: 2 });
-    canvasText(g, s.reflection ? u.yesShort : u.noShort, 1125, 1114, 180, 30, { align: 'right', weight: 800 });
-    canvasText(g, u.footerLine, 600, 1223, 1050, 20, { align: 'center', color: '#806e78' });
-    canvasText(g, 'zerobeyondlogic.github.io/uwaki-sheet', 600, 1267, 1050, 18, { align: 'center', color: '#806e78' });
+    line(g, 150, 1110, 1050, 1110, '#ff33c4', 4);
+    canvasText(g, `${u.reflectionLabel} → ${s.reflection ? u.yesShort : u.noShort}`, 600, 1125, 980, 25, { color: '#4a2140', align: 'center' });
+    canvasText(g, u.footerLine, 600, 1167, 1000, 18, { align: 'center' });
     return cv;
   }
-  function createImage(snapshot, page) {
+
+  async function createImage(snapshot, page) {
+    await Promise.all([document.fonts.load('900 30px "Zen Maru Gothic"'), document.fonts.load('400 60px "Dela Gothic One"'), document.fonts.load('900 30px "Sheet Chinese"')]);
     return new Promise((resolve, reject) => {
       try {
         const cv = page === null ? drawSummary(snapshot) : drawSheet(snapshot, page);

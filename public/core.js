@@ -17,5 +17,10 @@ globalThis.SheetCore = (() => {
   const isComplete = state => answered(state) === TOTAL && typeof state.reflection === 'boolean';
   const firstUnanswered = state => state.answers.findIndex(v => !v);
   const groupIndex = index => index < 13 ? 0 : index < 27 ? 1 : 2;
-  return { TOTAL, initialState, normalizeState, counts, answered, isComplete, firstUnanswered, groupIndex };
+  const resultIndex = state => {
+    const values = counts(state);
+    const score = values[0] * 2 + values[1];
+    return score <= 15 ? 0 : score <= 35 ? 1 : score <= 55 ? 2 : 3;
+  };
+  return { TOTAL, initialState, normalizeState, counts, answered, isComplete, firstUnanswered, groupIndex, resultIndex };
 })();
