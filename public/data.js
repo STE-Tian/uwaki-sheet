@@ -249,7 +249,12 @@ globalThis.SHEET_DATA = {
       "introText": "如果你的另一半这样做，你会怎么想？40 道题，选择“算出轨”“不算出轨，但会介意”或“完全没问题”。",
       "start": "开始判定",
       "resultKicker": "你的判定类型是…",
-      "post": "分享到 X"
+      "post": "分享到 X",
+      "postBilibili": "分享到 Bilibili",
+      "postXiaohongshu": "分享到小红书",
+      "sharePreparing": "结果图生成中，请稍后再试",
+      "shareCopied": "文案已复制，结果图已开始下载。请在发布页粘贴文案并添加图片。",
+      "shareManual": "结果图已开始下载，请手动复制下方文案后发布。"
     },
     "ja": {
       "htmlLang": "ja",
@@ -308,7 +313,12 @@ globalThis.SHEET_DATA = {
       "introText": "恋人がこれをしたら…？ 全40問を「① 浮気」「② 浮気じゃないけど嫌」「③ 全然OK」の3択でタップしていくだけ。最後にあなたの判定タイプと結果画像が出て、そのままXにポストできます。",
       "start": "判定スタート",
       "resultKicker": "あなたの判定は…",
-      "post": "でポストする"
+      "post": "でポストする",
+      "postBilibili": "Bilibiliでシェア",
+      "postXiaohongshu": "小紅書でシェア",
+      "sharePreparing": "結果画像を作成中です。少し待ってからお試しください",
+      "shareCopied": "テキストをコピーし、結果画像の保存を開始しました。投稿画面で貼り付けて画像を添付してください。",
+      "shareManual": "結果画像の保存を開始しました。下のテキストをコピーして投稿してください。"
     }
   },
   "types": [

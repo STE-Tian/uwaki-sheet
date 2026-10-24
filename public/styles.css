@@ -40,7 +40,6 @@ h1 small{font-size:.62em}
 .choice{appearance:none;font:inherit;font-weight:900;font-size:18px;letter-spacing:.08em;text-align:left;display:flex;align-items:center;gap:14px;padding:12px 14px;border:3px solid var(--ink);background:transparent;color:var(--ink);cursor:pointer;border-radius:4px;transition:background .12s,color .12s}
 .choice .box{width:30px;height:30px;border:4px solid currentColor;flex:0 0 auto;display:grid;place-items:center;font-family:var(--f-num);font-size:20px;line-height:1}
 .choice.on{background:var(--ink);color:var(--white)}
-.choice.on .box::after{content:"✓"}
 @media (hover:hover){.choice:hover{background:var(--ink-soft)}.choice.on:hover{background:var(--ink)}}
 .nav{display:flex;justify-content:space-between;align-items:center;gap:10px}
 .link{appearance:none;background:none;border:0;color:var(--ink);font:inherit;font-weight:700;font-size:15px;cursor:pointer;padding:6px 2px;text-decoration:underline;text-underline-offset:4px}
@@ -98,6 +97,8 @@ html[lang=zh-CN] h1,html[lang=zh-CN] .res-type{font-weight:900}
 .result-lead{letter-spacing:.2em}
 .res-type{overflow-wrap:anywhere}
 .btn:disabled{opacity:.35;cursor:default}
+.btn[aria-disabled=true]{opacity:.35;cursor:wait}
+.platform-share-status{font-size:12px;line-height:1.7;color:var(--text);margin:0}
 .qtext{font-weight:700;overflow-wrap:anywhere}
 .sheet-heading{font-size:clamp(24px,7vw,38px)}
 .sheet-chapter{margin-top:4px}

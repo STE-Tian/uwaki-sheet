@@ -10,6 +10,7 @@
   let toastTimer;
   let advanceTimer;
   let previewUrls = [];
+  let summaryImage = null;
   try { state = C.normalizeState(JSON.parse(localStorage.getItem(STORAGE_KEY))); } catch { /* Use a fresh sheet if storage cannot be read. */ }
   const queryLang = new URL(location.href).searchParams.get('lang');
   if (['zh', 'ja'].includes(queryLang)) state.lang = queryLang;
@@ -85,7 +86,7 @@
     const counts = C.counts(state);
     const text = shareText();
     const intent = 'https://twitter.com/intent/tweet?text=' + encodeURIComponent(text);
-    return `<div class="result-content"><p class="lead result-lead">${u.resultKicker}</p><h2 id="view-heading" tabindex="-1" class="res-type">${type.name}</h2><p class="res-desc">${type.desc}</p><div class="counts">${counts.map((n, i) => `<div class="count ${i === 0 ? 'c1' : ''}"><b>${n}</b><small>${circles[i]} ${u.shortLabels[i]}</small></div>`).join('')}</div><img class="card-img" id="card-image" alt="${u.resultAlt}" width="1200" height="1200"><div class="actions"><button id="export-summary" class="btn solid">${u.export}</button><a class="btn solid" href="${intent}" target="_blank" rel="noopener noreferrer">𝕏 ${u.post}</a><button id="copy-result" class="link">${u.copy}</button></div><textarea id="share-text" class="share-text" aria-label="${u.shareText}">${esc(text)}</textarea><details class="export-details"><summary>${u.exportSheet}</summary><div class="export-pages">${D.groups.map((g, k) => `<div class="export-page"><img id="preview-${k}" alt="${u.savePreview} · ${format(u.sheetPage, { n: k + 1 })}" width="1500" height="2000"><button class="link" data-download="${k}">${format(u.download, { n: k + 1 })}</button></div>`).join('')}</div></details><details class="answers-details"><summary>${u.allAnswers}</summary><ol class="alist">${state.answers.map((a, i) => `<li><span class="n">${pad(i + 1)}.</span><span class="t">${esc(q(i))}</span><button class="a k${a}" data-jump="${i}" aria-label="${u.edit} ${pad(i + 1)}">${circles[a - 1]}</button></li>`).join('')}</ol></details><div class="nav"><button class="link" id="edit">← ${u.edit}</button><button class="link" id="reset">${u.reset}</button></div></div>`;
+    return `<div class="result-content"><p class="lead result-lead">${u.resultKicker}</p><h2 id="view-heading" tabindex="-1" class="res-type">${type.name}</h2><p class="res-desc">${type.desc}</p><div class="counts">${counts.map((n, i) => `<div class="count ${i === 0 ? 'c1' : ''}"><b>${n}</b><small>${circles[i]} ${u.shortLabels[i]}</small></div>`).join('')}</div><img class="card-img" id="card-image" alt="${u.resultAlt}" width="1200" height="1200"><div class="actions"><button id="export-summary" class="btn solid">${u.export}</button><a class="btn solid" href="${intent}" target="_blank" rel="noopener noreferrer">𝕏 ${u.post}</a><a id="share-bilibili" class="btn solid" href="https://t.bilibili.com/" target="_blank" rel="noopener noreferrer" data-platform-share aria-disabled="true">${u.postBilibili}</a><a id="share-xiaohongshu" class="btn solid" href="https://creator.xiaohongshu.com/publish/publish?target=image" target="_blank" rel="noopener noreferrer" data-platform-share aria-disabled="true">${u.postXiaohongshu}</a><p class="platform-share-status" id="platform-share-status" role="status" hidden></p><button id="copy-result" class="link">${u.copy}</button></div><textarea id="share-text" class="share-text" aria-label="${u.shareText}">${esc(text)}</textarea><details class="export-details"><summary>${u.exportSheet}</summary><div class="export-pages">${D.groups.map((g, k) => `<div class="export-page"><img id="preview-${k}" alt="${u.savePreview} · ${format(u.sheetPage, { n: k + 1 })}" width="1500" height="2000"><button class="link" data-download="${k}">${format(u.download, { n: k + 1 })}</button></div>`).join('')}</div></details><details class="answers-details"><summary>${u.allAnswers}</summary><ol class="alist">${state.answers.map((a, i) => `<li><span class="n">${pad(i + 1)}.</span><span class="t">${esc(q(i))}</span><button class="a k${a}" data-jump="${i}" aria-label="${u.edit} ${pad(i + 1)}">${circles[a - 1]}</button></li>`).join('')}</ol></details><div class="nav"><button class="link" id="edit">← ${u.edit}</button><button class="link" id="reset">${u.reset}</button></div></div>`;
   }
   function footer() {
     const u = t();
@@ -96,6 +97,7 @@
     const generation = ++renderId;
     for (const url of previewUrls) URL.revokeObjectURL(url);
     previewUrls = [];
+    summaryImage = null;
     const u = t();
     document.documentElement.lang = u.htmlLang;
     document.title = u.pageTitle;
@@ -116,6 +118,10 @@
           const url = URL.createObjectURL(blob);
           previewUrls.push(url);
           document.getElementById(page === null ? 'card-image' : `preview-${page}`).src = url;
+          if (page === null) {
+            summaryImage = blob;
+            root.querySelectorAll('[data-platform-share]').forEach(link => link.removeAttribute('aria-disabled'));
+          }
         }).catch(() => { if (generation === renderId) toast(t().exportFailed); });
       }
     }
@@ -164,6 +170,7 @@
     click('reset', () => { clearTimeout(advanceTimer); document.getElementById('reset-dialog').showModal(); });
     click('export-summary', () => downloadImage(null));
     click('copy-result', copyResult);
+    root.querySelectorAll('[data-platform-share]').forEach(link => link.onclick = shareToPlatform);
     root.querySelectorAll('[data-download]').forEach(button => button.onclick = () => downloadImage(Number(button.dataset.download)));
   }
   function next() {
@@ -197,6 +204,29 @@
     const textarea = document.getElementById('share-text');
     try { await navigator.clipboard.writeText(textarea.value); toast(t().copied); }
     catch { textarea.focus(); textarea.select(); toast(t().copyFailed); }
+  }
+  function shareToPlatform(event) {
+    if (!summaryImage) {
+      event.preventDefault();
+      toast(t().sharePreparing);
+      return;
+    }
+    const u = t();
+    const textarea = document.getElementById('share-text');
+    const status = document.getElementById('platform-share-status');
+    // Start clipboard access while this page still has focus. The anchor opens
+    // the platform normally after this synchronous click handler returns.
+    let copied;
+    try { copied = navigator.clipboard.writeText(textarea.value).then(() => true, () => false); }
+    catch { copied = Promise.resolve(false); }
+    saveImageBlob(summaryImage, `uwaki-sheet-${state.lang}-result.png`);
+    status.hidden = false;
+    status.textContent = u.shareManual;
+    copied.then(success => {
+      if (!status.isConnected) return;
+      status.textContent = success ? u.shareCopied : u.shareManual;
+      if (!success) { textarea.focus({ preventScroll: true }); textarea.select(); }
+    });
   }
 
   /* Export images are rendered in the browser. */
@@ -323,14 +353,17 @@
     const snapshot = structuredClone(state);
     try {
       const blob = await createImage(snapshot, page);
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = `uwaki-sheet-${snapshot.lang}-${page === null ? 'result' : `page-${page + 1}`}.png`;
-      document.body.append(a); a.click(); a.remove();
-      setTimeout(() => URL.revokeObjectURL(url), 60000);
+      saveImageBlob(blob, `uwaki-sheet-${snapshot.lang}-${page === null ? 'result' : `page-${page + 1}`}.png`);
       toast(t().exportDone);
     } catch (error) { console.error('Image export failed', error); toast(t().exportFailed); }
+  }
+  function saveImageBlob(blob, filename) {
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.append(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 60000);
   }
   save();
   render();
