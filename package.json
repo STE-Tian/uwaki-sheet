@@ -1,0 +1,11 @@
+{
+  "name": "uwaki-sheet",
+  "version": "1.0.0",
+  "private": true,
+  "description": "这算出轨吗？ / これって浮気？ 简中・日本語判定表",
+  "scripts": {
+    "start": "node scripts/serve.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "engines": { "node": ">=20" }
+}
