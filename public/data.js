@@ -3,6 +3,7 @@ globalThis.SHEET_DATA = {
   "source": "https://x.com/sukosuko_sukoya/status/2107121927278166034",
   "design": "https://x.com/air_trpg",
   "reference": "https://ikura1.github.io/uwaki-hantei/",
+  "websiteCreatorUrl": "https://space.bilibili.com/337168962",
   "questions": [
     [
       "異性と二人でランチに行く",
@@ -234,6 +235,7 @@ globalThis.SHEET_DATA = {
       "credit": "原题：健屋花那",
       "designCredit": "原版表格设计：ありあ",
       "referenceCredit": "参考网页版：ikura1",
+      "websiteCredit": "网页制作：",
       "resetTitle": "重新填写？",
       "resetDescription": "这会清空当前的 40 道题和换位思考答案，无法恢复。",
       "cancel": "保留答案",
@@ -298,6 +300,7 @@ globalThis.SHEET_DATA = {
       "credit": "原案：健屋花那",
       "designCredit": "原版シートデザイン：ありあ",
       "referenceCredit": "参考Web版：ikura1",
+      "websiteCredit": "ウェブ制作：",
       "resetTitle": "最初からやり直しますか？",
       "resetDescription": "40 問の回答と最後のふりかえりを削除します。元には戻せません。",
       "cancel": "回答を残す",

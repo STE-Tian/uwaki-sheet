@@ -90,7 +90,7 @@
   }
   function footer() {
     const u = t();
-    return `<footer class="credit">${u.credit}（<a href="${D.source}" target="_blank" rel="noopener noreferrer">@sukosuko_sukoya</a>）<br>${u.designCredit}（<a href="${D.design}" target="_blank" rel="noopener noreferrer">@air_trpg</a>）<br><a href="${D.reference}" target="_blank" rel="noopener noreferrer">${u.referenceCredit}</a></footer>`;
+    return `<footer class="credit">${u.credit}（<a href="${D.source}" target="_blank" rel="noopener noreferrer">@sukosuko_sukoya</a>）<br>${u.designCredit}（<a href="${D.design}" target="_blank" rel="noopener noreferrer">@air_trpg</a>）<br><a href="${D.reference}" target="_blank" rel="noopener noreferrer">${u.referenceCredit}</a><br>${u.websiteCredit}<a href="${D.websiteCreatorUrl}" target="_blank" rel="noopener noreferrer">beyondlogic</a></footer>`;
   }
   function render(focusId) {
     clearTimeout(advanceTimer);

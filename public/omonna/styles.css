@@ -1,0 +1,45 @@
+:root {
+  --yellow: #ffed4d;
+}
+
+.legend {
+  background: var(--yellow);
+  border: 2px solid var(--ink);
+  color: var(--text);
+}
+
+.row-text .n {
+  color: var(--yellow);
+  -webkit-text-stroke: 1px var(--ink-deep);
+  paint-order: stroke fill;
+  text-shadow: 0 0 1px var(--ink-deep);
+}
+
+.free-entry {
+  display: grid;
+  gap: 8px;
+}
+
+.free-entry p {
+  color: var(--text);
+  font-size: 13px;
+  line-height: 1.7;
+  margin: 0;
+}
+
+.free-entry textarea {
+  min-height: 112px;
+}
+
+.free-entry textarea:focus-visible, .share-text:focus-visible {
+  outline: 2px solid var(--ink-deep);
+  outline-offset: 2px;
+}
+
+.result-note {
+  color: var(--text);
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font-size: 14px;
+}
