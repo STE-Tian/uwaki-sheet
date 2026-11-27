@@ -6,6 +6,7 @@
   let map;
   let markers;
   let chart;
+  let adminToken = sessionStorage.getItem("visitorMapAdminToken") || "";
 
   function status(message, error = false) {
     $("status").textContent = message;
@@ -14,13 +15,27 @@
   function number(value) {
     return Number(value || 0).toLocaleString("zh-CN");
   }
+  function getToken() {
+    if (!adminToken) {
+      const entered = window.prompt("请输入你在 Cloudflare Worker 中设置的管理员访问密钥：");
+      if (!entered) throw new Error("未输入管理员访问密钥。");
+      adminToken = entered.trim();
+      sessionStorage.setItem("visitorMapAdminToken", adminToken);
+    }
+    return adminToken;
+  }
   async function api(path) {
     const response = await fetch(apiBase + path, {
-      credentials: "include",
-      headers: { "Accept": "application/json" }
+      credentials: "omit",
+      headers: {
+        "Accept": "application/json",
+        "Authorization": "Bearer " + getToken()
+      }
     });
     if (response.status === 401 || response.status === 403) {
-      throw new Error("管理员身份验证失败。请确认 Cloudflare Access 已保护管理 API，并使用获准的邮箱登录。");
+      adminToken = "";
+      sessionStorage.removeItem("visitorMapAdminToken");
+      throw new Error("管理员密钥无效或 API 拒绝访问。刷新页面后重新输入密钥。");
     }
     if (!response.ok) throw new Error("统计 API 请求失败：" + response.status);
     return response.json();
