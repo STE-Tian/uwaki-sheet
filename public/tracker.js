@@ -1,19 +1,19 @@
 (() => {
   "use strict";
 
+  try {
+    if (localStorage.getItem("uwaki-analytics-optout") === "1") return;
+  } catch { return; }
+
   const config = window.VISITOR_MAP_CONFIG || {};
   const apiBase = String(config.apiBase || "").replace(/\/$/, "");
   if (!apiBase || !/^https:\/\//i.test(apiBase)) return;
 
   const allowedHost = "ste-tian.github.io";
   if (location.hostname !== allowedHost) return;
-
-  // Do not collect from local previews or non-production paths.
   if (!location.pathname.startsWith("/uwaki-sheet/")) return;
 
-  const eventId = typeof crypto.randomUUID === "function"
-    ? crypto.randomUUID()
-    : null;
+  const eventId = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null;
   if (!eventId) return;
 
   const ua = navigator.userAgent || "";
@@ -32,7 +32,6 @@
     browser
   };
 
-  // Fire-and-forget: analytics must never block the questionnaire.
   fetch(apiBase + "/api/collect", {
     method: "POST",
     mode: "cors",
