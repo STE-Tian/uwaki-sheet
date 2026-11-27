@@ -15,68 +15,30 @@ function corsHeaders(origin, allowedOrigin) {
   return {
     "access-control-allow-origin": allowedOrigin,
     "access-control-allow-methods": "GET, POST, OPTIONS",
-    "access-control-allow-headers": "Content-Type",
+    "access-control-allow-headers": "Content-Type, Authorization",
     "access-control-max-age": "86400",
     "vary": "Origin"
   };
 }
 
-function base64UrlToBytes(value) {
-  const padded = value.replace(/-/g, "+").replace(/_/g, "/") +
-    "=".repeat((4 - value.length % 4) % 4);
-  return Uint8Array.from(atob(padded), c => c.charCodeAt(0));
+async function constantTimeEqual(left, right) {
+  const encoder = new TextEncoder();
+  const [a, b] = await Promise.all([
+    crypto.subtle.digest("SHA-256", encoder.encode(left)),
+    crypto.subtle.digest("SHA-256", encoder.encode(right))
+  ]);
+  const aa = new Uint8Array(a);
+  const bb = new Uint8Array(b);
+  let diff = 0;
+  for (let i = 0; i < aa.length; i++) diff |= aa[i] ^ bb[i];
+  return diff === 0;
 }
 
-function decodeJwtPart(value) {
-  return JSON.parse(new TextDecoder().decode(base64UrlToBytes(value)));
-}
-
-let jwksCache;
-let jwksFetchedAt = 0;
-
-async function verifyAccessJwt(request, env) {
-  const token = request.headers.get("Cf-Access-Jwt-Assertion");
-  if (!token || !env.ACCESS_TEAM_DOMAIN || !env.ACCESS_AUD ||
-      env.ACCESS_TEAM_DOMAIN.startsWith("YOUR_") ||
-      env.ACCESS_AUD.startsWith("REPLACE_")) return null;
-
-  const parts = token.split(".");
-  if (parts.length !== 3) return null;
-
-  let header, payload;
-  try {
-    header = decodeJwtPart(parts[0]);
-    payload = decodeJwtPart(parts[1]);
-  } catch {
-    return null;
-  }
-
-  const now = Math.floor(Date.now() / 1000);
-  const issuer = "https://" + env.ACCESS_TEAM_DOMAIN;
-  if (header.alg !== "RS256" || payload.iss !== issuer ||
-      !Array.isArray(payload.aud) || !payload.aud.includes(env.ACCESS_AUD) ||
-      !Number.isFinite(payload.exp) || payload.exp <= now ||
-      (payload.nbf && payload.nbf > now)) return null;
-
-  try {
-    if (!jwksCache || Date.now() - jwksFetchedAt > 3600000) {
-      const response = await fetch(issuer + "/cdn-cgi/access/certs");
-      if (!response.ok) return null;
-      jwksCache = await response.json();
-      jwksFetchedAt = Date.now();
-    }
-    const jwk = jwksCache.keys.find(key => key.kid === header.kid);
-    if (!jwk) return null;
-    const publicKey = await crypto.subtle.importKey(
-      "jwk", jwk, { name: "RSASSA-PKCS1-v1_5", hash: "SHA-256" }, false, ["verify"]
-    );
-    const signed = new TextEncoder().encode(parts[0] + "." + parts[1]);
-    return await crypto.subtle.verify(
-      "RSASSA-PKCS1-v1_5", publicKey, base64UrlToBytes(parts[2]), signed
-    ) ? payload : null;
-  } catch {
-    return null;
-  }
+async function isAdmin(request, env) {
+  const expected = env.ADMIN_TOKEN || "";
+  const supplied = (request.headers.get("Authorization") || "").replace(/^Bearer\s+/i, "");
+  if (!expected || !supplied || supplied.length > 512) return false;
+  return constantTimeEqual(supplied, expected);
 }
 
 function dateCutoff(days) {
@@ -106,11 +68,11 @@ async function collect(request, env) {
   if (!(request.headers.get("content-type") || "").toLowerCase().startsWith("application/json")) {
     return json({ error: "content_type_not_allowed" }, 415);
   }
-  const length = Number(request.headers.get("content-length") || 0);
-  if (length > 4096) return json({ error: "payload_too_large" }, 413);
 
+  const rawBody = await request.text();
+  if (rawBody.length > 4096) return json({ error: "payload_too_large" }, 413);
   let body;
-  try { body = await request.json(); }
+  try { body = JSON.parse(rawBody); }
   catch { return json({ error: "invalid_json" }, 400); }
   if (!validEventId(body.event_id)) return json({ error: "invalid_event_id" }, 400);
 
@@ -119,6 +81,8 @@ async function collect(request, env) {
     ? body.page_path.replace(/[\u0000-\u001f]/g, "") : null;
   if (!pagePath || pagePath.startsWith("//")) return json({ error: "invalid_page_path" }, 400);
 
+  // Cloudflare supplies the connecting IP's approximate geo metadata in request.cf.
+  // The IP itself is never read into application storage or written to D1.
   const cf = request.cf || {};
   const latitude = roundCoordinate(cf.latitude);
   const longitude = roundCoordinate(cf.longitude);
@@ -134,7 +98,7 @@ async function collect(request, env) {
     `).bind(
       body.event_id,
       now,
-      typeof cf.country === "string" ? cf.country.slice(0, 100) : null,
+      typeof cf.country === "string" ? cf.country.slice(0, 2) : null,
       typeof cf.country === "string" ? cf.country.slice(0, 2) : null,
       typeof cf.continent === "string" ? cf.continent.slice(0, 8) : null,
       typeof cf.region === "string" ? cf.region.slice(0, 120) : null,
@@ -157,8 +121,7 @@ async function collect(request, env) {
 }
 
 async function adminApi(request, env, url) {
-  const claims = await verifyAccessJwt(request, env);
-  if (!claims) return json({ error: "unauthorized" }, 401);
+  if (!await isAdmin(request, env)) return json({ error: "unauthorized" }, 401);
 
   const days = clampDays(url.searchParams.get("days"));
   const cutoff = dateCutoff(days);
