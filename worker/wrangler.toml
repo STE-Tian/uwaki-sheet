@@ -1,0 +1,14 @@
+name = "uwaki-visitor-collector"
+main = "src/index.js"
+compatibility_date = "2026-11-27"
+
+[vars]
+ALLOWED_ORIGIN = "https://ste-tian.github.io"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "uwaki-visitor-map"
+database_id = "REPLACE_WITH_D1_DATABASE_ID"
+
+[triggers]
+crons = ["17 3 * * *"]
