@@ -12,10 +12,17 @@
   <script src="./data.js?v=f77d349" defer></script>
   <script src="./core.js" defer></script>
   <script src="./app.js" defer></script>
+  <script src="./visitor-config.js" defer></script>
+  <script src="./tracker.js" defer></script>
 </head>
 <body>
   <a class="skip-link" href="#content">跳到问卷 / 質問へ</a>
   <div id="root"></div>
+  <aside id="analytics-notice" style="max-width:760px;margin:18px auto 24px;padding:10px 14px;color:#777;font-size:12px;text-align:center">
+    本网站使用匿名访问统计估算访客所在地区，不保存原始 IP，也不收集问卷答案。
+    <button id="analytics-optout" type="button" style="margin-left:8px;border:0;background:transparent;text-decoration:underline;cursor:pointer;color:inherit">拒绝统计</button>
+    <span lang="ja"> / 匿名アクセス解析を使用しています。生の IP アドレスや回答内容は保存しません。</span>
+  </aside>
   <div id="toast" role="status" aria-live="polite"></div>
   <dialog id="reset-dialog" aria-labelledby="reset-title">
     <h2 id="reset-title"></h2>
@@ -23,5 +30,11 @@
     <div class="dialog-actions"><button id="cancel-reset" class="button secondary"></button><button id="confirm-reset" class="button primary"></button></div>
   </dialog>
   <noscript><p class="noscript">请启用 JavaScript 后填写问卷。JavaScript を有効にしてください。</p></noscript>
+  <script>
+    document.getElementById("analytics-optout").addEventListener("click", () => {
+      try { localStorage.setItem("uwaki-analytics-optout", "1"); } catch {}
+      document.getElementById("analytics-notice").textContent = "已拒绝访问统计 / アクセス解析を拒否しました。";
+    });
+  </script>
 </body>
 </html>
