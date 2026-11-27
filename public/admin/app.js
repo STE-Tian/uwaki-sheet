@@ -43,10 +43,24 @@
   function initMap() {
     if (map || !window.L) return;
     map = L.map("map", { worldCopyJump: true }).setView([25, 10], 2);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
-      maxZoom: 10,
-      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-    }).addTo(map);
+    // tile.openstreetmap.org answers this page with the policy-block image because
+    // the dashboard sends no Referer. OpenFreeMap's dark style is a public OSM basemap
+    // that does not require an API key; CARTO raster tiles now require one.
+    try {
+      if (typeof L.maplibreGL === "function") {
+        L.maplibreGL({
+          style: "https://tiles.openfreemap.org/styles/dark",
+          attributionControl: {
+            customAttribution:
+              '<a href="https://openfreemap.org/" target="_blank" rel="noopener noreferrer">OpenFreeMap</a> ' +
+              '<a href="https://www.openmaptiles.org/" target="_blank" rel="noopener noreferrer">&copy; OpenMapTiles</a> ' +
+              'Data from <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noopener noreferrer">OpenStreetMap</a>'
+          }
+        }).addTo(map);
+      }
+    } catch (error) {
+      console.error(error);
+    }
     markers = L.layerGroup().addTo(map);
   }
   function drawMap(rows) {
@@ -147,5 +161,6 @@
   }
   $("refresh").addEventListener("click", load);
   $("range").addEventListener("change", load);
+  initMap();
   load();
 })();
