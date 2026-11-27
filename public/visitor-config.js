@@ -2,5 +2,5 @@
 // https://uwaki-visitor-collector.<your-subdomain>.workers.dev
 // Leave empty to disable visitor analytics until the backend is configured.
 window.VISITOR_MAP_CONFIG = {
-  apiBase: ""
+  apiBase: "https://uwaki-visitor-collector.jizetian.workers.dev"
 };
