@@ -8,7 +8,7 @@ ALLOWED_ORIGIN = "https://ste-tian.github.io"
 [[d1_databases]]
 binding = "DB"
 database_name = "uwaki-visitor-map"
-database_id = "REPLACE_WITH_D1_DATABASE_ID"
+database_id = "da2d9a8f-17d0-455b-90ad-d3b6368fad7e"
 
 [triggers]
 crons = ["17 3 * * *"]
