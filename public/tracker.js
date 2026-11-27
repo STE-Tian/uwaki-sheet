@@ -13,6 +13,9 @@
   if (location.hostname !== allowedHost) return;
   if (!location.pathname.startsWith("/uwaki-sheet/")) return;
 
+  const notice = document.getElementById("analytics-notice");
+  if (notice) notice.style.display = "block";
+
   const eventId = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : null;
   if (!eventId) return;
 
